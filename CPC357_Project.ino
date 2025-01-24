@@ -12,14 +12,14 @@ const int dht11_pin = 21; // For DHT11 pin
 const int led_green = 19; // For green LED to simulate on/off
 const int relay_pin = 32; // For Octocoupler pin that controls the fan (ventilation)
 const int button_pin = 33; // For push button pin
-const int idle = 3000;
+const int idle = 3000; // Time taken before going to sleep mode
 
-unsigned long current = millis();
+unsigned long current = millis(); // Place holders for time taken
 unsigned long previous = 0;
 
-bool active = false;
+bool active = false; // Flags to keep track of shaft motor and LED
 bool flag = true;
-float humidity = 0;
+float humidity = 0; // Placeholders values for humidity and temperature
 float temperature = 0;
 
 DHT dht(dht11_pin, DHTTYPE);
@@ -45,6 +45,8 @@ void setup_wifi() {
   Serial.println(WiFi.localIP());
 }
 
+
+// Check if button is clicked which puts the system to sleep and later wakes up.
 void IRAM_ATTR button_click() {
   flag = !flag;
   active = true;
@@ -72,6 +74,7 @@ void IRAM_ATTR button_click() {
   }
 }
 
+// Display wakeup reason system wakes up
 void print_wakeup_reason() {
   esp_sleep_wakeup_cause_t wakeup_reason;
 
@@ -91,10 +94,12 @@ void setup() {
   print_wakeup_reason();
   Serial.println("Welcome.");
 
+  // Set the sensors and acutators pin mode
   pinMode(button_pin, INPUT_PULLUP);
   pinMode(led_green, OUTPUT);
   pinMode(relay_pin, OUTPUT);
 
+  // Set the default behaviour of the devices
   digitalWrite(led_green, LOW);
   digitalWrite(relay_pin, false);
 
@@ -102,8 +107,8 @@ void setup() {
   vOneClient.setup();
 
   dht.begin();
-  attachInterrupt(digitalPinToInterrupt(button_pin), button_click, HIGH);
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)button_pin, LOW);
+  attachInterrupt(digitalPinToInterrupt(button_pin), button_click, HIGH); // Function call when button is clicked
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)button_pin, LOW); // Function call to wake up the system when button is clicked
 
   esp_log_level_set("*", ESP_LOG_NONE);
 
@@ -117,6 +122,7 @@ void loop() {
   delay(5000);
   current = millis();
 
+  // Check if client is unable to connect to cloud platform and restarts it
   if (!vOneClient.connected()) {
     vOneClient.reconnect();
     vOneClient.publishDeviceStatusEvent(dht11_id, true);
@@ -128,10 +134,10 @@ void loop() {
     active = false;
   }
 
-  int button_val = !digitalRead(button_pin);
+  int button_val = !digitalRead(button_pin); // Reads button value
     
-  humidity = dht.readHumidity();
-  temperature = dht.readTemperature();
+  humidity = dht.readHumidity(); // Reads humidity value
+  temperature = dht.readTemperature(); // Reads temeprature value
 
   if (isnan(humidity) || isnan(temperature)) {
     Serial.println("Failed to read from DHT sensor.");
@@ -144,6 +150,7 @@ void loop() {
   Serial.print(humidity);
   Serial.print("\n");
 
+  // Check if the humidity or temperature is above/below the threshold to turn off the LED and shaft motor
   if (humidity > 90 || temperature > 25) {
     digitalWrite(led_green, HIGH);
     digitalWrite(relay_pin, true);
@@ -159,6 +166,6 @@ void loop() {
   JSONVar payloadObject;    
   payloadObject["Humidity"] = humidity;
   payloadObject["Temperature"] = temperature;
-  vOneClient.publishTelemetryData(dht11_id, payloadObject); // Publish Humidity and Temperature data to VOne platform
-  vOneClient.publishTelemetryData(button_id, "Button1", button_val); // Publish button reading to VOne platform
+  vOneClient.publishTelemetryData(dht11_id, payloadObject); // Publish Humidity and Temperature data to cloud platform
+  vOneClient.publishTelemetryData(button_id, "Button1", button_val); // Publish button reading to cloud platform
 }
